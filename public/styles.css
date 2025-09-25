@@ -1178,3 +1178,53 @@ main#main-content {
 .btn-stop:hover {
     background-color: #dc2626; /* red-600 */
 }
+
+/* --- Pipe Patrol Game Styles --- */
+#pipe-patrol-canvas {
+    /* FIX: Replaced non-existent variable with a direct color value */
+    border: 4px solid #374151; /* gray-700 */
+    border-radius: 0.75rem;
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.2), 0 4px 6px -2px rgba(0, 0, 0, 0.1);
+    display: block;
+    margin: 1rem auto;
+}
+
+/* Dark mode variable overrides for Pipe Patrol */
+.dark {
+    /* These variables will be read by the JS game logic */
+    --color-pipe-wall: #2D5B91;
+    --color-pipe-path: #0F172A;
+    --color-drip: #87CEFA;
+    --color-monster-tap: #E2584B;
+    --color-monster-pipe: #E76F00;
+    --color-monster-sprinkler: #1B9C2C;
+    --color-wrench: #FFD700;
+    --color-player: #00BFFF;
+    --color-text: #E0E0E0;
+}
+
+/* Feedback text for quiz and game results */
+.feedback-text {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 2.5rem; /* Larger for impact */
+    font-weight: bold;
+    color: white; /* Default, will be overridden by JS */
+    text-shadow: 0 0 10px black;
+    animation: fade-up-and-out 1.5s forwards;
+    z-index: 20;
+}
+
+@keyframes fade-up-and-out {
+    0% {
+        opacity: 1;
+        transform: translate(-50%, 0px);
+    }
+    100% {
+        opacity: 0;
+        transform: translate(-50%, -80px);
+    }
+}
+
