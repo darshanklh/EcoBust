@@ -2,7 +2,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebas
 // Combined and cleaned up Auth imports
 import { getAuth, onAuthStateChanged, GoogleAuthProvider, getRedirectResult, signOut, setPersistence, browserLocalPersistence, signInWithPopup, signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 // Firestore imports (no change needed)
-import { getFirestore, collection, doc, setDoc, getDoc, onSnapshot, query, orderBy, limit, writeBatch, updateDoc, increment, addDoc, serverTimestamp, where } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+import { getFirestore, collection, doc, setDoc, getDoc, getDocs, onSnapshot, query, orderBy, limit, writeBatch, updateDoc, increment, addDoc, serverTimestamp, where } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 // ADD a new import for Firebase Storage
 import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-storage.js";
 
@@ -543,33 +543,75 @@ function renderMeditationPlayer() {
     });
 }
 
-function renderJournal() {
-    const promptEl = document.getElementById('journal-prompt');
-    const textarea = document.getElementById('journal-textarea');
-    const saveBtn = document.getElementById('save-journal-btn');
+// Replace your old renderJournal function with this new, simpler one
+// Replace your old renderJournal function with this corrected version
 
-    // Select a random prompt
-    const randomPrompt = journalPrompts[Math.floor(Math.random() * journalPrompts.length)];
-    promptEl.textContent = randomPrompt;
-    textarea.value = ''; // Clear textarea
+// Replace your old journal function(s) with this one
 
-    // Add event listener (ensure it's only added once)
-    if (saveBtn.getAttribute('listener') !== 'true') {
+async function renderJournal() {
+    if (!currentUser) return;
+
+    // Use the new ID to reliably find the card
+    const journalCard = document.getElementById('daily-journal-card');
+    if (!journalCard) {
+        console.error("Journal card not found! Check the ID in your HTML.");
+        return;
+    }
+
+    // Get today's date in a consistent YYYY-MM-DD format
+    const todayStr = new Date().toISOString().slice(0, 10);
+
+    // Get the user's data from Firestore
+    const userDocRef = doc(db, usersCollectionPath, currentUser.uid);
+    const userDocSnap = await getDoc(userDocRef);
+    const lastEntryDate = userDocSnap.data()?.lastJournalDate;
+
+    if (lastEntryDate === todayStr) {
+        // --- STATE 1: User has already written today ---
+        journalCard.innerHTML = `
+            <h3 class="text-2xl font-bold mb-4">Today's Reflection</h3>
+            <p class="mb-4 p-3 bg-green-100 dark:bg-green-900/50 rounded-lg text-green-800 dark:text-green-200 font-medium">
+                You've completed your reflection for today. Great job!
+            </p>
+            <div class="w-full p-3 rounded-lg border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 flex-grow overflow-y-auto">
+                <p class="text-left">Come back tomorrow for a new prompt.</p>
+            </div>
+            <button class="btn btn-primary w-full mt-4 bg-green-700 cursor-not-allowed" disabled>Completed for Today ✅</button>
+        `;
+
+    } else {
+        // --- STATE 2: User has NOT written today ---
+        const randomPrompt = journalPrompts[Math.floor(Math.random() * journalPrompts.length)];
+        journalCard.innerHTML = `
+            <h3 class="text-2xl font-bold mb-4">Daily Journal</h3>
+            <p id="journal-prompt" class="mb-4 p-3 bg-green-100 dark:bg-green-900/50 rounded-lg text-green-800 dark:text-green-200 font-medium">${randomPrompt}</p>
+            <textarea id="journal-textarea" rows="5" class="w-full p-3 rounded-lg border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-green-500 flex-grow" placeholder="Write your thoughts here..."></textarea>
+            <button id="save-journal-btn" class="btn btn-primary w-full mt-4">Save Entry & Earn 5 Points</button>
+        `;
+
+        const saveBtn = journalCard.querySelector('#save-journal-btn');
+        const textarea = journalCard.querySelector('#journal-textarea');
+
         saveBtn.addEventListener('click', async () => {
-            if (textarea.value.trim().length < 10) {
+            const entryText = textarea.value.trim();
+            if (entryText.length < 10) {
                 showToastNotification("Please write a little more to save your entry.", 3000);
                 return;
             }
-            if (!currentUser) return;
-            const userRef = doc(db, usersCollectionPath, currentUser.uid);
-            await updateDoc(userRef, { points: increment(5) });
-            showToastNotification("Entry saved! +5 points for mindfulness.", 4000);
-            textarea.value = ''; // Clear after saving
+
+            // When saving, update Firestore with points and the date
+            await updateDoc(userDocRef, {
+                points: increment(5),
+                lastJournalDate: todayStr // This locks it for the day
+            });
+
+            showToastNotification("Reflection saved! +5 points.", 4000);
+
+            // Re-run this function to show the "completed" state
+            renderJournal();
         });
-        saveBtn.setAttribute('listener', 'true');
     }
 }
-
 function renderNatureChallenge() {
     const card = document.getElementById('nature-challenge-card');
     // Get a new challenge each day
@@ -1809,6 +1851,10 @@ function startBreathingExercise() {
                 gameTitle.textContent = 'Bag Dodger';
                 launchBagDodgerGame();
                 break;
+            case 'water-conservation':
+                gameTitle.textContent = "Pipe Patrol";
+                launchPipePatrolGame();
+                break;
             default:
                 gameTitle.textContent = 'Coming Soon';
                 gameContentArea.innerHTML = `<p class="text-center p-8">This mini-game is under construction. Check back later!</p>`;
@@ -2750,11 +2796,6 @@ async function addPointsForGame(pointsEarned, gameId, rawScore = 1) { // Default
         }
         cameraModalContainer.classList.add('hidden');
     });
-
-    // --- Start the app ---
-    initializeAuth();
-
-});
 // pix game
 function launchEcoRunnerGame() {
     // --- Get all DOM elements ---
@@ -3140,3 +3181,334 @@ function launchEcoRunnerGame() {
     ctx.fillRect(0, canvas.height - 10, canvas.width, 10);
     player.draw();
 }
+function launchPipePatrolGame() {
+    const canvas = document.createElement('canvas');
+    canvas.id = 'pipe-patrol-canvas';
+    gameContentArea.innerHTML = ''; // Clear previous game content
+    gameContentArea.appendChild(canvas);
+
+    const ctx = canvas.getContext('2d');
+
+    const GRID_SIZE = 20; // Size of each cell in pixels
+    const MAZE_WIDTH = 25; // Cells wide
+    const MAZE_HEIGHT = 15; // Cells high
+
+    canvas.width = MAZE_WIDTH * GRID_SIZE;
+    canvas.height = MAZE_HEIGHT * GRID_SIZE;
+
+    const gameFont = "16px 'Inter', sans-serif";
+
+    // Game Objects
+    let Drip = { x: 1, y: 1, dx: 0, dy: 0, speed: 2 };
+    let drips = [];
+    let monsters = [];
+    let wrench = null;
+    let wrenchActive = false;
+    let wrenchTimer = 0;
+    let score = 0;
+    let isGameOver = false;
+    let animationFrameId;
+    let inputBuffer = [];
+    let totalDroplets = 0;
+    
+
+    const COLORS = {
+        WALL: '#4A90E2', PATH: '#E8F5FF', DRIP: '#87CEFA', MONSTER_RUNNING_TAP: '#FF4136',
+        MONSTER_BROKEN_PIPE: '#FF851B', MONSTER_SPRINKLER: '#2ECC40', WRENCH: '#FFD700',
+        PLAYER: '#00BFFF', TEXT: '#333333'
+    };
+    const DARK_COLORS = {
+        WALL: '#2D5B91', PATH: '#0F172A', DRIP: '#87CEFA', MONSTER_RUNNING_TAP: '#E2584B',
+        MONSTER_BROKEN_PIPE: '#E76F00', MONSTER_SPRINKLER: '#1B9C2C', WRENCH: '#FFD700',
+        PLAYER: '#00BFFF', TEXT: '#E0E0E0'
+    };
+
+    let currentPalette = COLORS;
+
+    function applyDarkModeStyles() {
+        currentPalette = document.body.classList.contains('dark') ? DARK_COLORS : COLORS;
+    }
+
+    let maze = [
+        [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+        [1,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,1],
+        [1,0,1,1,1,0,1,1,1,0,1,0,1,0,1,1,1,0,1,1,1,0,1,0,1],
+        [1,0,1,0,0,0,0,0,1,0,1,0,0,0,0,0,1,0,1,0,0,0,1,0,1],
+        [1,0,1,0,1,1,1,0,1,0,1,1,1,1,1,0,1,0,1,0,1,1,1,0,1],
+        [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+        [1,0,1,1,1,0,1,1,1,0,1,0,1,0,1,1,1,0,1,0,1,1,1,0,1],
+        [1,0,0,0,0,0,1,0,0,0,1,0,1,0,1,0,0,0,1,0,0,0,0,0,1],
+        [1,0,1,1,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,1,1,0,1],
+        [1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,1],
+        [1,1,1,1,1,0,1,0,1,1,1,0,1,1,1,0,1,0,1,1,1,0,1,1,1],
+        [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+        [1,0,1,1,1,0,1,1,1,0,1,0,1,0,1,1,1,0,1,1,1,0,1,0,1],
+        [1,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,1],
+        [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]
+    ];
+
+    activeGame.cleanup = () => {
+        cancelAnimationFrame(animationFrameId);
+        document.removeEventListener('keydown', handleInput);
+    };
+
+    function initGame() {
+        applyDarkModeStyles();
+        Drip = { x: 1, y: 1, dx: 0, dy: 0, speed: 2.0 };
+        drips = []; monsters = []; wrench = null;
+        wrenchActive = false; wrenchTimer = 0; score = 0;
+        isGameOver = false; inputBuffer = [];
+
+        for (let r = 0; r < MAZE_HEIGHT; r++) {
+            for (let c = 0; c < MAZE_WIDTH; c++) {
+                if (maze[r][c] === 0) {
+                    drips.push({ x: c, y: r, collected: false });
+                }
+            }
+        }
+        totalDroplets = drips.length;
+        
+        monsters.push(createMonster('Running Tap', MAZE_WIDTH - 2, 1, COLORS.MONSTER_RUNNING_TAP));
+        monsters.push(createMonster('Broken Pipe', 1, MAZE_HEIGHT - 2, COLORS.MONSTER_BROKEN_PIPE));
+        monsters.push(createMonster('Sprinkler', MAZE_WIDTH - 2, MAZE_HEIGHT - 2, COLORS.MONSTER_SPRINKLER));
+
+        spawnWrench();
+        document.addEventListener('keydown', handleInput);
+        gameLoop();
+    }
+
+    function createMonster(name, startX, startY, color) {
+        return { name, x: startX, y: startY, dx: 0, dy: 0, speed: 1, color, isChasing: true };
+    }
+
+    function spawnWrench() {
+        let r, c;
+        // **FIX:** The old logic caused an infinite loop. This new logic just finds any empty path tile that isn't the player's starting spot.
+        do {
+            r = Math.floor(Math.random() * MAZE_HEIGHT);
+            c = Math.floor(Math.random() * MAZE_WIDTH);
+        } while (maze[r][c] === 1 || (c === 1 && r === 1));
+        wrench = { x: c, y: r, active: true };
+    }
+
+    function handleInput(e) {
+        const keyMap = { ArrowUp: { dx: 0, dy: -1 }, ArrowDown: { dx: 0, dy: 1 }, ArrowLeft: { dx: -1, dy: 0 }, ArrowRight: { dx: 1, dy: 0 }};
+        if (keyMap[e.key]) {
+            inputBuffer.push(keyMap[e.key]);
+        }
+    }
+
+    function updateDrip() {
+    // --- NEW "TRUE CORNERING" AND MOVEMENT LOGIC ---
+
+    const currentGridX = Math.round(Drip.x);
+    const currentGridY = Math.round(Drip.y);
+    const isAtIntersection = Math.abs(Drip.x - currentGridX) < 0.1 && Math.abs(Drip.y - currentGridY) < 0.1;
+
+    // 1. Check for a buffered turn if we are at an intersection.
+    if (isAtIntersection && inputBuffer.length > 0) {
+        const nextMove = inputBuffer[0];
+        const nextTileX = currentGridX + nextMove.dx;
+        const nextTileY = currentGridY + nextMove.dy;
+
+        if (maze[nextTileY][nextTileX] === 0) {
+            // Valid turn found! Snap to grid and apply the new direction.
+            Drip.x = currentGridX;
+            Drip.y = currentGridY;
+            Drip.dx = nextMove.dx;
+            Drip.dy = nextMove.dy;
+            inputBuffer.shift(); // Consume the valid input from the buffer.
+        }
+    }
+    
+    // 2. Clear the buffer if the buffered move is invalid (e.g., trying to turn into a wall).
+    // This stops the player from being stuck waiting for an impossible turn.
+    if (inputBuffer.length > 0) {
+        const nextMove = inputBuffer[0];
+        const nextTileX = currentGridX + nextMove.dx;
+        const nextTileY = currentGridY + nextMove.dy;
+        if (maze[nextTileY][nextTileX] !== 0) {
+            inputBuffer.shift();
+        }
+    }
+
+    // 3. Calculate the next position based on the current direction.
+    const nextX = Drip.x + Drip.dx * Drip.speed / GRID_SIZE;
+    const nextY = Drip.y + Drip.dy * Drip.speed / GRID_SIZE;
+
+    // 4. Check for wall collisions.
+    const wallCheckX = (Drip.dx > 0) ? Math.ceil(nextX) : Math.floor(nextX);
+    const wallCheckY = (Drip.dy > 0) ? Math.ceil(nextY) : Math.floor(nextY);
+
+    if (maze[wallCheckY][wallCheckX] === 1) {
+        // If moving into a wall, stop precisely at the grid line.
+        Drip.x = currentGridX;
+        Drip.y = currentGridY;
+        Drip.dx = 0;
+        Drip.dy = 0;
+    } else {
+        // Otherwise, continue the smooth movement.
+        Drip.x = nextX;
+        Drip.y = nextY;
+    }
+
+    // 5. Collect drips (no changes needed here).
+    drips.forEach(drip => {
+        if (!drip.collected && drip.x === Math.round(Drip.x) && drip.y === Math.round(Drip.y)) {
+            drip.collected = true;
+            score += 10;
+        }
+    });
+
+    // 6. Collect wrench (no changes needed here).
+    if (wrench && wrench.active && Math.round(Drip.x) === wrench.x && Math.round(Drip.y) === wrench.y) {
+        wrenchActive = true;
+        wrenchTimer = 300; // 5 seconds
+        wrench.active = false;
+    }
+}
+
+    function updateMonsters() {
+        monsters.forEach(monster => {
+            if (!monster.isChasing) return;
+
+            const monsterGridX = Math.round(monster.x);
+            const monsterGridY = Math.round(monster.y);
+
+            if (Math.abs(monster.x - monsterGridX) < 0.1 && Math.abs(monster.y - monsterGridY) < 0.1) {
+                const possibleMoves = [];
+                if (maze[monsterGridY][monsterGridX + 1] === 0) possibleMoves.push({dx: 1, dy: 0});
+                if (maze[monsterGridY][monsterGridX - 1] === 0) possibleMoves.push({dx: -1, dy: 0});
+                if (maze[monsterGridY + 1][monsterGridX] === 0) possibleMoves.push({dx: 0, dy: 1});
+                if (maze[monsterGridY - 1][monsterGridX] === 0) possibleMoves.push({dx: 0, dy: -1});
+
+                const filteredMoves = possibleMoves.filter(m => !(m.dx === -monster.dx && m.dy === -monster.dy))
+                const movesToConsider = filteredMoves.length > 0 ? filteredMoves : possibleMoves;
+
+                let bestMove = movesToConsider[0];
+                let bestDist = -1;
+
+                movesToConsider.forEach(move => {
+                    const dist = Math.hypot((monsterGridX + move.dx) - Drip.x, (monsterGridY + move.dy) - Drip.y);
+                    if ((wrenchActive && dist > bestDist) || (!wrenchActive && (dist < bestDist || bestDist === -1))) {
+                        bestDist = dist;
+                        bestMove = move;
+                    }
+                });
+
+                if (bestMove) {
+                    monster.dx = bestMove.dx;
+                    monster.dy = bestMove.dy;
+                }
+            }
+
+            monster.x += monster.dx * monster.speed / GRID_SIZE;
+            monster.y += monster.dy * monster.speed / GRID_SIZE;
+
+            if (Math.hypot(Drip.x - monster.x, Drip.y - monster.y) < 0.8) {
+                if (wrenchActive) {
+                    monster.isChasing = false;
+                    score += 50;
+                    // **FIX:** This logic prevents the game from crashing when a monster respawns.
+                    const respawnPoints = [
+                        {x: MAZE_WIDTH - 2, y: 1}, {x: 1, y: MAZE_HEIGHT - 2}, {x: MAZE_WIDTH - 2, y: MAZE_HEIGHT - 2}
+                    ];
+                    const point = respawnPoints[Math.floor(Math.random() * respawnPoints.length)];
+                    setTimeout(() => {
+                        Object.assign(monster, createMonster(monster.name, point.x, point.y, monster.color));
+                    }, 5000);
+                } else {
+                    gameOver(false);
+                }
+            }
+        });
+    }
+
+    function updateWrenchTimer() {
+        if (wrenchActive) {
+            wrenchTimer--;
+            if (wrenchTimer <= 0) {
+                wrenchActive = false;
+                setTimeout(spawnWrench, 5000);
+            }
+        }
+    }
+
+    function checkWinCondition() {
+        if (drips.every(d => d.collected)) {
+            gameOver(true);
+        }
+    }
+    
+    function draw() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        // Draw Maze
+        for (let r = 0; r < MAZE_HEIGHT; r++) {
+            for (let c = 0; c < MAZE_WIDTH; c++) {
+                ctx.fillStyle = maze[r][c] === 1 ? currentPalette.WALL : currentPalette.PATH;
+                ctx.fillRect(c * GRID_SIZE, r * GRID_SIZE, GRID_SIZE, GRID_SIZE);
+            }
+        }
+        // Draw Drips, Monsters, Wrench, Player
+        drips.forEach(d => { if (!d.collected) { ctx.fillStyle = currentPalette.DRIP; ctx.beginPath(); ctx.arc(d.x * GRID_SIZE + GRID_SIZE/2, d.y * GRID_SIZE + GRID_SIZE/2, GRID_SIZE/4, 0, Math.PI * 2); ctx.fill(); }});
+        monsters.forEach(m => { if(m.isChasing) { ctx.fillStyle = m.color; ctx.beginPath(); ctx.arc(m.x * GRID_SIZE + GRID_SIZE/2, m.y * GRID_SIZE + GRID_SIZE/2, GRID_SIZE/2-2, 0, Math.PI * 2); ctx.fill(); }});
+        if (wrench && wrench.active) { ctx.fillStyle = currentPalette.WRENCH; ctx.fillRect(wrench.x * GRID_SIZE + GRID_SIZE/4, wrench.y * GRID_SIZE + GRID_SIZE/4, GRID_SIZE/2, GRID_SIZE/2); }
+        ctx.fillStyle = currentPalette.PLAYER; ctx.beginPath(); ctx.arc(Drip.x * GRID_SIZE + GRID_SIZE/2, Drip.y * GRID_SIZE + GRID_SIZE/2, GRID_SIZE/2-2, 0, Math.PI * 2); ctx.fill();
+        
+        // Draw UI
+        ctx.font = gameFont; ctx.fillStyle = currentPalette.TEXT; ctx.textAlign = 'left';
+        ctx.fillText(`Score: ${score}`, 5, canvas.height - 5);
+        if (wrenchActive) { ctx.textAlign = 'right'; ctx.fillStyle = currentPalette.WRENCH; ctx.fillText(`Power: ${Math.ceil(wrenchTimer / 60)}s`, canvas.width - 5, canvas.height - 5); }
+    }
+
+    function gameLoop() {
+        if (isGameOver) return;
+        applyDarkModeStyles();
+        updateDrip();
+        updateMonsters();
+        updateWrenchTimer();
+        draw();
+        checkWinCondition();
+        animationFrameId = requestAnimationFrame(gameLoop);
+    }
+
+    function gameOver(win) {
+    isGameOver = true;
+    cancelAnimationFrame(animationFrameId);
+    document.removeEventListener('keydown', handleInput);
+
+    // --- NEW PROPORTIONAL SCORING LOGIC ---
+    // 1. Calculate the percentage of droplets the player collected.
+    const dropletsEaten = score / 10;
+    const percentageCollected = totalDroplets > 0 ? (dropletsEaten / totalDroplets) : 0;
+
+    // 2. Award points based on that percentage, capped at a max of 50.
+    const finalPoints = Math.round(percentageCollected * 50);
+    const rawScore = score > 0 ? score : 1; 
+
+    gameContentArea.innerHTML = `
+        <div class="text-center p-8 flex flex-col justify-center items-center h-full">
+            <h3 class="text-3xl font-bold mb-4 ${win ? 'text-green-500' : 'text-red-500'}">${win ? 'YOU WIN! 🎉' : 'GAME OVER! 💧💥'}</h3>
+            <p class="text-xl mb-2 text-gray-600 dark:text-gray-300">Droplets Collected: <span class="font-bold text-blue-500">${dropletsEaten} / ${totalDroplets}</span></p>
+            <p class="text-2xl font-bold text-yellow-500 mt-4">Points Gained: ⭐ ${finalPoints}</p>
+            <button id="restart-pipe-patrol" class="btn btn-primary mt-6">Try Again!</button>
+        </div>
+    `;
+
+    document.getElementById('restart-pipe-patrol').addEventListener('click', () => {
+        const newCanvas = document.createElement('canvas');
+        newCanvas.id = 'pipe-patrol-canvas';
+        gameContentArea.innerHTML = '';
+        gameContentArea.appendChild(newCanvas);
+        launchPipePatrolGame();
+    });
+    
+    addPointsForGame(finalPoints, 'water-conservation', rawScore);
+}
+    initGame();
+}
+    // --- Start the app ---
+    initializeAuth();
+
+});
+
