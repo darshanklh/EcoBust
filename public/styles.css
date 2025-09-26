@@ -1178,7 +1178,6 @@ main#main-content {
 .btn-stop:hover {
     background-color: #dc2626; /* red-600 */
 }
-
 /* --- Pipe Patrol Game Styles --- */
 #pipe-patrol-canvas {
     /* FIX: Replaced non-existent variable with a direct color value */
